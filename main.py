@@ -4,7 +4,6 @@ import torchvision.transforms as transforms
 from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
-from tqdm import tqdm
 from CapsNet import *
 
 def train(model, loss_fn, train_loader, optimizer, device, epoch, num_epochs):
@@ -47,7 +46,7 @@ def test(model, loss_fn, test_loader, device):
             correct += pred.eq(target).sum().item()
     average_loss = total_loss / len(test_loader.dataset)
     accuracy = 100.0 * correct / len(test_loader.dataset)
-    print(f"Average Test Loss: {average_loss:.4f}, Accuracy: {accuracy:.2f}%")
+    print(f"\nAverage Test Loss: {average_loss:.4f}, Accuracy: {accuracy:.2f}%")
 
 def main():
     # Hyperparameters
