@@ -32,6 +32,7 @@ class DigitCapsules(nn.Module):
         self.num_iterations = num_iterations
         self.route_weights = nn.Parameter(torch.randn(out_capsules, in_capsules, in_dim, out_dim))
 
+    # routing algorithm
     def forward(self, x):
         priors = x[None, :, :, None, :] @ self.route_weights[:, None, :, :, :]
         logits = torch.zeros(*priors.size(), device=x.device)
