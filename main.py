@@ -4,13 +4,15 @@ import torchvision.transforms as transforms
 from torchvision.datasets import MNIST
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor
+from tqdm import tqdm
 from CapsNet import *
-  
-# Training loop
-def train(model, loss_fn, train_loader, optimizer, device):
+
+def train(model, loss_fn, train_loader, optimizer, device, epoch, num_epochs):
     model.train()
     total_loss = 0
-    for batch_idx, (data, target) in enumerate(train_loader):
+    num_batches = len(train_loader)
+
+    for batch_idx, (data, target) in enumerate(train_loader, 1):
         data, target = data.to(device), target.to(device)
 
         # Forward pass
@@ -26,11 +28,9 @@ def train(model, loss_fn, train_loader, optimizer, device):
 
         total_loss += loss.item()
 
-        if batch_idx % 100 == 0:
-            print(f"Batch {batch_idx}/{len(train_loader)}, Loss: {loss.item():.4f}")
-
-    average_loss = total_loss / len(train_loader.dataset)
-    print(f"Average Training Loss: {average_loss:.4f}")
+        avg_loss = total_loss / batch_idx # calc average loss
+        progress = 50 * batch_idx // num_batches # calculate progress for the progress bar
+        print(f"\rEpoch {epoch}/{num_epochs} [{'=' * progress}{' ' * (50 - progress)}] {100 * batch_idx // num_batches}% Loss: {loss.item():.4f} Avg Loss: {avg_loss:.4f}", end='')
 
 
 def test(model, loss_fn, test_loader, device):
@@ -73,9 +73,7 @@ def main():
     
     # Training and Testing
     for epoch in range(num_epochs):
-        print(f"Epoch {epoch+1}/{num_epochs}")
-        train(model, capsule_loss, train_loader, optimizer, device)
-        # mixed_precision_train(model, capsule_loss, train_loader, optimizer, device)
+        train(model, capsule_loss, train_loader, optimizer, device, epoch, num_epochs)
         test(model, capsule_loss, test_loader, device)
         scheduler.step()
 
