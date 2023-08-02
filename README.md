@@ -1,5 +1,5 @@
 # Capsule-Network
-Test of Capsule Network performance on MNIST Dataset using PyTorch and RTX3060 12GB. Improvement on the code developed by [Pushing the Limits of Capsule Networks](https://www.cs.princeton.edu/courses/archive/fall17/cos429/COS429-proj/COS429_capsule_PremRohanStefan.pdf) which used [gram-ai/capsule-networks](https://github.com/gram-ai/capsule-networks) as a starting point. Code was cleaned and updated with current Pytorch Functionality as well as better GPU utilization.
+Test of Capsule Network performance on MNIST Dataset using PyTorch and RTX3060 12GB. Improvement on the code developed by [Pushing the Limits of Capsule Networks](https://www.cs.princeton.edu/courses/archive/fall17/cos429/COS429-proj/COS429_capsule_PremRohanStefan.pdf) which used [gram-ai/capsule-networks](https://github.com/gram-ai/capsule-networks) as a starting point. Code was cleaned and updated with current Pytorch Functionality as well as better GPU utilization with progress bar.
 
 ## Sources
 [Dynamic Routing Between Capsules](https://arxiv.org/abs/1710.09829)

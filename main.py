@@ -30,7 +30,7 @@ def train(model, loss_fn, train_loader, optimizer, device, epoch, num_epochs):
 
         avg_loss = total_loss / batch_idx # calc average loss
         progress = 50 * batch_idx // num_batches # calculate progress for the progress bar
-        print(f"\rEpoch {epoch}/{num_epochs} [{'=' * progress}{' ' * (50 - progress)}] {100 * batch_idx // num_batches}% Loss: {loss.item():.4f} Avg Loss: {avg_loss:.4f}", end='')
+        print(f"\rEpoch {epoch+1}/{num_epochs} [{'=' * progress}{' ' * (50 - progress)}] {100 * batch_idx // num_batches}% Loss: {loss.item():.4f} Avg Loss: {avg_loss:.4f}", end='')
 
 
 def test(model, loss_fn, test_loader, device):
