@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 from torchvision.datasets import MNIST
@@ -32,6 +31,7 @@ def train(model, loss_fn, train_loader, optimizer, device):
 
     average_loss = total_loss / len(train_loader.dataset)
     print(f"Average Training Loss: {average_loss:.4f}")
+
 
 def test(model, loss_fn, test_loader, device):
     model.eval()
@@ -75,6 +75,7 @@ def main():
     for epoch in range(num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs}")
         train(model, capsule_loss, train_loader, optimizer, device)
+        # mixed_precision_train(model, capsule_loss, train_loader, optimizer, device)
         test(model, capsule_loss, test_loader, device)
         scheduler.step()
 

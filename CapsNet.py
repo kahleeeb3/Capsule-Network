@@ -3,19 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-def softmax(x, dim=1):
-    e_x = torch.exp(x - x.max(dim=dim, keepdim=True)[0])
-    return e_x / e_x.sum(dim=dim, keepdim=True)
-
 class PrimaryCapsules(nn.Module):
-    def __init__(self, in_channels, out_channels, num_capsules, capsule_dim, kernel_size, stride):
+    def __init__(self, in_channels, out_channels, capsule_dim, kernel_size, stride):
         super(PrimaryCapsules, self).__init__()
-        self.num_capsules = num_capsules
-        # self.capsule_dim = capsule_dim
+        self.capsule_dim = capsule_dim
 
         self.capsules = nn.ModuleList([
             nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=0) 
-            for _ in range(num_capsules)
+            for _ in range(capsule_dim)
         ])
 
     def squash(self, tensor, dim=-1):  # take a vector and scale it to have length in [0,1)
@@ -45,9 +40,8 @@ class DigitCapsules(nn.Module):
         scale = squared_norm / (1 + squared_norm)
         return scale * tensor / torch.sqrt(squared_norm)
     
-    def forward(self, x):   # x size = batches, maps, side, side
-        # print("x shape:", x.shape)
-        # print("route_weights shape:", self.route_weights.shape)
+    # Routing Algorithm
+    def forward(self, x):
         priors = x[None, :, :, None, :] @ self.route_weights[:, None, :, :, :]
         logits = torch.zeros(*priors.size(), device=x.device)
         for i in range(self.num_iterations):
@@ -65,9 +59,8 @@ class CapsNet(nn.Module):
         self.num_classes = num_classes
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=256, kernel_size=9, stride=1)
-        self.primary_capsules = PrimaryCapsules(in_channels=256, out_channels=8, num_capsules=32, capsule_dim=8, kernel_size=9, stride=2)
-        # self.digit_capsules = DigitCapsules(in_capsules=32 * 6 * 6, in_dim=8, out_capsules=10, out_dim=16, num_iterations=3)
-        self.digit_capsules = DigitCapsules(in_capsules=288, in_dim=32, out_capsules=10, out_dim=16, num_iterations=3)
+        self.primary_capsules = PrimaryCapsules(in_channels=256, out_channels=32, capsule_dim=8, kernel_size=9, stride=2)
+        self.digit_capsules = DigitCapsules(in_capsules=(32*6*6), in_dim=8, out_capsules=10, out_dim=16, num_iterations=3)
 
         self.decoder = nn.Sequential(
                 nn.Linear(16 * num_classes, 512),
