@@ -1,11 +1,3 @@
-"""
-CapsNet.py
-The architecture is shallow with only two convolutional layers and one fully connected layer
-1. Conv1 - 256, 9 x 9 convolution kernels with a stride of 1 and ReLU activation. 
-This layer converts pixel intensities to the activities of local feature detectors that are then used as inputs to the primary capsules.
-2. PrimaryCaps - each primary capsule contains 8 convolutional units with a 9 x 9 kernel and a stride of 2.
-Each primary capsule output sees the outputs of all 256 x 81 Conv1 units whose receptive
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,82 +7,84 @@ def softmax(x, dim=1):
     e_x = torch.exp(x - x.max(dim=dim, keepdim=True)[0])
     return e_x / e_x.sum(dim=dim, keepdim=True)
 
-class CapsuleLayer(nn.Module):
-    def __init__(self, num_capsules, num_route_nodes, num_iterations,\
-                 in_channels, out_channels, kernel_size=None, stride=None):
-        super(CapsuleLayer, self).__init__()
+class PrimaryCapsules(nn.Module):
+    def __init__(self, in_channels, out_channels, num_capsules, capsule_dim, kernel_size, stride):
+        super(PrimaryCapsules, self).__init__()
         self.num_capsules = num_capsules
-        self.num_route_nodes = num_route_nodes
-        self.num_iterations = num_iterations
+        # self.capsule_dim = capsule_dim
 
-        if num_route_nodes != -1:   # real capsule layer
-            self.route_weights = nn.Parameter(torch.randn(num_capsules, num_route_nodes, \
-                                                          in_channels, out_channels))
-        else:  # just convolution
-            self.capsules = nn.ModuleList(
-                [nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, \
-                           stride=stride, padding=0) for _ in range(num_capsules)])
+        self.capsules = nn.ModuleList([
+            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=0) 
+            for _ in range(num_capsules)
+        ])
 
     def squash(self, tensor, dim=-1):  # take a vector and scale it to have length in [0,1)
         squared_norm = (tensor ** 2).sum(dim=dim, keepdim=True)
         scale = squared_norm / (1 + squared_norm)
         return scale * tensor / torch.sqrt(squared_norm)
-
-    def forward(self, x, save_vecs = False):   # x size = batches, maps, side, side
-        if save_vecs:
-            vecs = []
-        if self.num_route_nodes != -1:   # real capsule layer
-            priors = x[None, :, :, None, :] @ self.route_weights[:, None, :, :, :]
-            logits = Variable(torch.zeros(*priors.size())).cuda()
-            for i in range(self.num_iterations):
-                probs = softmax(logits, dim=2)  # probs = c, logits = b (froom paper)
-                outputs = self.squash((probs * priors).sum(dim=2, keepdim=True))
-                if save_vecs:
-                    vecs.append(outputs)
-                if i != self.num_iterations - 1:
-                    delta_logits = (priors * outputs).sum(dim=-1, keepdim=True)
-                    logits = logits + delta_logits
-        else:   # takes input from convolution
+    
+    def forward(self, x):   # x size = batches, maps, side, side
             outputs = [capsule(x).view(x.size(0), -1, 1) for capsule in self.capsules]
             outputs = torch.cat(outputs, dim=-1)
             outputs = self.squash(outputs)
-        if save_vecs:
-            return vecs
-        else:
             return outputs
+        
+class DigitCapsules(nn.Module):
+    def __init__(self, in_capsules, in_dim, out_capsules, out_dim, num_iterations):
+        super(DigitCapsules, self).__init__()
+        self.in_capsules = in_capsules
+        self.in_dim = in_dim
+        self.out_capsules = out_capsules
+        self.out_dim = out_dim
+        self.num_iterations = num_iterations
 
-class CapsuleNet(nn.Module):
-    def __init__(self, img_channels, num_classes=10, num_iterations=3, img_width=28, kernel_size=9):
-        super(CapsuleNet, self).__init__()
+        self.route_weights = nn.Parameter(torch.randn(out_capsules, in_capsules, in_dim, out_dim))
+
+    def squash(self, tensor, dim=-1):  # take a vector and scale it to have length in [0,1)
+        squared_norm = (tensor ** 2).sum(dim=dim, keepdim=True)
+        scale = squared_norm / (1 + squared_norm)
+        return scale * tensor / torch.sqrt(squared_norm)
+    
+    def forward(self, x):   # x size = batches, maps, side, side
+        # print("x shape:", x.shape)
+        # print("route_weights shape:", self.route_weights.shape)
+        priors = x[None, :, :, None, :] @ self.route_weights[:, None, :, :, :]
+        logits = torch.zeros(*priors.size(), device=x.device)
+        for i in range(self.num_iterations):
+            probs = torch.softmax(logits, dim=2)  # probs = c, logits = b (from the paper)
+            outputs = self.squash((probs * priors).sum(dim=2, keepdim=True))
+            if i != self.num_iterations - 1:
+                delta_logits = (priors * outputs).sum(dim=-1, keepdim=True)
+                logits = logits + delta_logits
+        return outputs
+
+class CapsNet(nn.Module):
+    def __init__(self, num_classes = 10, img_channels =1, img_width = 28):
+        super(CapsNet, self).__init__()
+
         self.num_classes = num_classes
-        self.kernel_size = kernel_size
-        self.conv1 = nn.Conv2d(in_channels=img_channels, out_channels=256, \
-                               kernel_size=kernel_size, stride=1)
-        self.primary_capsules = CapsuleLayer(num_capsules=8, num_route_nodes=-1, \
-                                             num_iterations=num_iterations, in_channels=256, \
-                                             out_channels=32, kernel_size=kernel_size, stride=2)
-        self.digit_capsules = CapsuleLayer(num_capsules=num_classes, num_route_nodes=\
-                                           32*int(((img_width-2*(kernel_size-1))/2)**2), \
-                                           num_iterations=num_iterations, in_channels=8, \
-                                           out_channels=16)
-        self.decoder = nn.Sequential(
-            nn.Linear(16 * num_classes, 512),
-            nn.ReLU(inplace=True),
-            nn.Linear(512, 1024),
-            nn.ReLU(inplace=True),
-            nn.Linear(1024, img_channels * img_width**2),
-            nn.Sigmoid()
-        )
 
-    def forward(self, x, y=None, all_reconstructions=False, perturb=None, save_vecs=False):
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=256, kernel_size=9, stride=1)
+        self.primary_capsules = PrimaryCapsules(in_channels=256, out_channels=8, num_capsules=32, capsule_dim=8, kernel_size=9, stride=2)
+        # self.digit_capsules = DigitCapsules(in_capsules=32 * 6 * 6, in_dim=8, out_capsules=10, out_dim=16, num_iterations=3)
+        self.digit_capsules = DigitCapsules(in_capsules=288, in_dim=32, out_capsules=10, out_dim=16, num_iterations=3)
+
+        self.decoder = nn.Sequential(
+                nn.Linear(16 * num_classes, 512),
+                nn.ReLU(inplace=True),
+                nn.Linear(512, 1024),
+                nn.ReLU(inplace=True),
+                nn.Linear(1024, img_channels * img_width**2),
+                nn.Sigmoid()
+            )
+
+
+    def forward(self, x, y=None, all_reconstructions=False, perturb=None):
         batch_size = x.size(0)
         x = F.relu(self.conv1(x), inplace=True)
         x = self.primary_capsules(x)
-        vecs = self.digit_capsules(x, save_vecs=save_vecs)
-        if save_vecs:
-            x = vecs[-1]
-        else:
-            x = vecs
+        vecs = self.digit_capsules(x)
+        x = vecs
         x = x.view(self.num_classes, batch_size, 16).transpose(0, 1)
         classes = (x ** 2).sum(dim=-1) ** 0.5
         classes = F.softmax(classes, dim=1)
@@ -128,9 +122,6 @@ class CapsuleNet(nn.Module):
                     vec[len(r)*feature_index+i, 16*index+feature_index] = val
             perturbations = self.decoder(vec)
             ret.append(perturbations)
-
-        if save_vecs:
-            ret.append([vec.view(self.num_classes, batch_size, 16).transpose(0, 1) for vec in vecs])
 
         return tuple(ret)
 
